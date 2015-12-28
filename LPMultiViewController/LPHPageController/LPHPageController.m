@@ -18,6 +18,7 @@ static CGFloat _duration = 0.25;
 @implementation LPHPageController{
     UIScrollView *_scrollView;
     BOOL _isSelectedScroll;
+    BOOL _isScrollBegin;
 }
 
 #pragma mark - Initialization
@@ -26,6 +27,7 @@ static CGFloat _duration = 0.25;
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
     if (self) {
         self.edgesForExtendedLayout = UIRectEdgeNone;
+        _isScrollBegin = YES;
     }
     return self;
 }
@@ -55,6 +57,7 @@ static CGFloat _duration = 0.25;
     _scrollView.pagingEnabled = YES;
     _scrollView.showsHorizontalScrollIndicator = NO;
     _scrollView.bounces = NO;
+    _scrollView.scrollsToTop = NO;
     [self.view addSubview:_scrollView];
     
     NSMutableArray<LPHPageBarItem *> *items = [NSMutableArray array];
@@ -69,6 +72,7 @@ static CGFloat _duration = 0.25;
         }
         [items addObject:vc.pageBarItem];
     }];
+    _pageBar.hPageController = self;
     _pageBar.topViewRect = _topView.frame;
     _pageBar.items = items;
     [self.view addSubview:_pageBar];
@@ -92,6 +96,26 @@ static CGFloat _duration = 0.25;
                                    self.view.bounds.size.width,
                                    self.view.bounds.size.height - CGRectGetMaxY(_pageBar.frame) - _bottomView.bounds.size.height);
     _scrollView.contentSize = CGSizeMake(self.view.bounds.size.width * _viewControllers.count, 0);
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [_viewControllers[_selectedIndex] lp_viewWillAppear:NO];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [_viewControllers[_selectedIndex] lp_viewDidAppear:NO];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [_viewControllers[_selectedIndex] lp_viewWillDisappear:NO];
+}
+
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    [_viewControllers[_selectedIndex] lp_viewDidDisappear:NO];
 }
 
 #pragma mark - Accessors
@@ -149,6 +173,14 @@ static CGFloat _duration = 0.25;
     }
 }
 
+- (void)reloadPageBarItems {
+    NSMutableArray<LPHPageBarItem *> *items = [NSMutableArray array];
+    for (UIViewController *vc in _viewControllers) {
+        [items addObject:vc.pageBarItem];
+    }
+    _pageBar.items = items;
+}
+
 #pragma mark - LPHPageBarDelegate
 
 - (void)didSelectedAtSection:(NSInteger)section withDuration:(NSTimeInterval)duration {
@@ -179,12 +211,22 @@ static CGFloat _duration = 0.25;
     if (fmodf(offsetScale, 1) != 0) {
         _isSelectedScroll = NO;
     }
+    if (_isScrollBegin) {
+        [_viewControllers[_selectedIndex] lp_viewWillDisappear:YES];
+        NSInteger offset = offsetScale / fabs(offsetScale) * ceil(fabs(offsetScale));
+        [_viewControllers[_selectedIndex + offset] lp_viewWillAppear:YES];
+        _isScrollBegin = NO;
+    }
+    
     if (_isSelectedScroll) {
-        _selectedIndex += offsetScale;;
+        _selectedIndex += offsetScale;
     } else {
         _pageBar.offsetScale = offsetScale;
         if (fabs(offsetScale) >= 1) {
+            [_viewControllers[_selectedIndex] lp_viewDidDisappear:YES];
             _selectedIndex += (NSInteger)offsetScale;
+            [_viewControllers[_selectedIndex] lp_viewDidAppear:YES];
+            _isScrollBegin = YES;
         }
     }
     
